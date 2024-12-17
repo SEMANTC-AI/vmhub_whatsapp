@@ -17,13 +17,4 @@ docker tag vmhub-whatsapp:latest us-central1-docker.pkg.dev/[PROJECT-ID]/vmhub-w
 docker push us-central1-docker.pkg.dev/[PROJECT-ID]/vmhub-whatsapp/whatsapp-service:latest
 
 # Deploy to Cloud Run
-gcloud run deploy vmhub-whatsapp \
-    --image us-central1-docker.pkg.dev/[PROJECT-ID]/vmhub-whatsapp/whatsapp-service:latest \
-    --platform managed \
-    --region us-central1 \
-    --port 8080 \
-    --memory 512Mi \
-    --cpu 1 \
-    --min-instances 0 \
-    --max-instances 10 \
-    --set-env-vars "TWILIO_ACCOUNT_SID=[SID],ENVIRONMENT=production"
+./scripts/deploy.sh semantc-ai dev us-central1
