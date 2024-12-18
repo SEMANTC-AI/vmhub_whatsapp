@@ -4,9 +4,6 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-import base64
-import mimetypes
-from typing import Optional
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
@@ -23,26 +20,12 @@ class WhatsAppTester:
     def __init__(self):
         self.account_sid = os.getenv('TWILIO_ACCOUNT_SID')
         self.auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-        self.from_number = os.getenv('TWILIO_FROM_NUMBER')
+        self.from_number = os.getenv('TWILIO_FROM_NUMBER')  # Your Twilio WhatsApp number
         
         if not all([self.account_sid, self.auth_token, self.from_number]):
             raise ValueError("Missing required environment variables")
         
         self.client = Client(self.account_sid, self.auth_token)
-        
-        # Media directory setup
-        self.media_dir = project_root / 'media'
-        
-        # Validate media directory exists
-        if not self.media_dir.exists():
-            raise ValueError(f"Media directory not found at {self.media_dir}")
-
-    def get_media_path(self, usage_count: int) -> Optional[Path]:
-        """Get the path to the loyalty card image based on usage count"""
-        card_file = self.media_dir / f'card{usage_count}.jpg'
-        if card_file.exists():
-            return card_file
-        return None
 
     def format_phone(self, phone: str) -> str:
         """Format phone number to WhatsApp format"""
@@ -59,7 +42,7 @@ class WhatsAppTester:
         
         raise ValueError(f"Invalid phone number format: {phone}")
 
-    def send_test_message(self, to_number: str, campaign_type: str = 'birthday', loyalty_count: int = 0):
+    def send_test_message(self, to_number: str, campaign_type: str = 'birthday'):
         """Send a test message"""
         try:
             # Format the phone number
@@ -70,27 +53,11 @@ class WhatsAppTester:
             
             print(f"Sending {campaign_type} message to {formatted_number}")
             
-            # Prepare message parameters
-            message_params = {
-                'from_': f'whatsapp:{self.from_number}',
-                'body': template.format(**parameters),
-                'to': f'whatsapp:{formatted_number}'
-            }
-
-            # Add media for loyalty campaign
-            if campaign_type == 'loyalty' and loyalty_count > 0:
-                media_path = self.get_media_path(loyalty_count)
-                if media_path:
-                    # Convert image to base64 for testing
-                    with open(media_path, 'rb') as image_file:
-                        image_data = image_file.read()
-                        media_type = mimetypes.guess_type(media_path)[0]
-                        message_params['media_url'] = [
-                            f"data:{media_type};base64,{base64.b64encode(image_data).decode()}"
-                        ]
-                    print(f"Including loyalty card image: {media_path.name}")
-            
-            message = self.client.messages.create(**message_params)
+            message = self.client.messages.create(
+                from_=f'whatsapp:{self.from_number}',
+                body=template.format(**parameters),
+                to=f'whatsapp:{formatted_number}'
+            )
             
             print(f"Message sent! SID: {message.sid}")
             print(f"Status: {message.status}")
@@ -116,8 +83,8 @@ class WhatsAppTester:
                 {"name": "Test User", "days": "30"}
             ),
             'loyalty': (
-                "Parabéns {name}! 🌟 Você completou {services} serviços! Aqui está seu cartão fidelidade atualizado.",
-                {"name": "Test User", "services": "5"}
+                "Olá {name}! 🌟 Você é um cliente especial! Aqui está um cupom de fidelidade: {coupon}",
+                {"name": "Test User", "coupon": "LOYAL10"}
             )
         }
         
@@ -144,21 +111,9 @@ def main():
     
     campaign_type = campaign_types.get(campaign_choice, 'birthday')
     
-    # Get loyalty count if applicable
-    loyalty_count = 0
-    if campaign_type == 'loyalty':
-        try:
-            loyalty_count = int(input("\nEnter number of services (1-10): "))
-            if not 1 <= loyalty_count <= 10:
-                print("Invalid service count. Using 1.")
-                loyalty_count = 1
-        except ValueError:
-            print("Invalid input. Using 1.")
-            loyalty_count = 1
-    
     # Initialize tester and send message
     tester = WhatsAppTester()
-    tester.send_test_message(phone, campaign_type, loyalty_count)
+    tester.send_test_message(phone, campaign_type)
 
 if __name__ == "__main__":
     main()
