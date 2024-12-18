@@ -1,3 +1,9 @@
+# TEST
+docker build -t vmhub-whatsapp .
+
+chmod +x scripts/test.sh
+./scripts/test.sh
+
 # Set up authentication for Artifact Registry
 gcloud auth configure-docker us-central1-docker.pkg.dev
 

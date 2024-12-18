@@ -23,8 +23,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code and tests
 COPY src/ src/
+COPY test/ test/
 
 # Create and use non-root user
 RUN useradd -m -s /bin/bash app \
@@ -37,5 +38,5 @@ ENV PYTHONPATH=/app
 # Expose port
 EXPOSE 8080
 
-# Set the entrypoint
+# Default command for service
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
