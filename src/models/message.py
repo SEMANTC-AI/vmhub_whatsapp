@@ -1,7 +1,7 @@
 # src/models/message.py
 
 from pydantic import BaseModel, Field, validator
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from datetime import datetime
 from src.config.constants import MessageStatus, CampaignType
 
@@ -19,6 +19,8 @@ class Message(BaseModel):
     phone_number: str
     template_name: str
     parameters: Dict[str, Any]
+    media_urls: Optional[List[str]] = None
+    loyalty_count: Optional[int] = None
     status: MessageStatus = MessageStatus.PENDING
     twilio_message_id: Optional[str] = None
     error_message: Optional[str] = None

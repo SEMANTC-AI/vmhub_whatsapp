@@ -1,11 +1,10 @@
-# src/services/twilio_client.py
-
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from src.config import settings
 from src.models.message import Message
 from src.utils.logging import get_logger
 from typing import Dict, Optional
+from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -16,6 +15,11 @@ class TwilioClient:
             settings.TWILIO_AUTH_TOKEN
         )
         self.logger = logger
+        self.bucket_url = f"https://storage.googleapis.com/{settings.GCS_BUCKET_NAME}"
+
+    def get_loyalty_card_url(self, count: int) -> Optional[str]:
+        """Get loyalty card image URL"""
+        return f"{self.bucket_url}/card{count}.jpg"
 
     async def send_message(self, message: Message) -> Dict:
         """Send WhatsApp message using Twilio"""
@@ -27,16 +31,34 @@ class TwilioClient:
                 template=message.template_name
             )
 
-            response = self.client.messages.create(
-                from_=f'whatsapp:{message.from_number}',
-                to=f'whatsapp:{message.phone_number}',
-                template=message.template_name,
-                language=message.language_code,
-                components=[{
-                    "type": "body",
-                    "parameters": message.parameters
-                }]
-            )
+            # Clean and format the from number - remove any comments and whitespace
+            from_number = settings.TWILIO_FROM_NUMBER.split('#')[0].strip()
+            if not from_number.startswith('+'):
+                from_number = f'+{from_number}'
+            from_whatsapp = f'whatsapp:{from_number}'
+
+            # Format the to number
+            to_whatsapp = f'whatsapp:+{message.phone_number}'
+
+            message_params = {
+                'from_': from_whatsapp,
+                'to': to_whatsapp,
+                'body': self._format_message(message.template_name, message.parameters)
+            }
+
+            # Add media for loyalty campaign
+            if message.campaign_type == 'loyalty' and message.loyalty_count:
+                media_url = self.get_loyalty_card_url(message.loyalty_count)
+                if media_url:
+                    message_params['media_url'] = [media_url]
+                    self.logger.info(
+                        "adding_loyalty_card",
+                        media_url=media_url,
+                        loyalty_count=message.loyalty_count
+                    )
+
+            print("Sending with params:", message_params)  # Debug print
+            response = self.client.messages.create(**message_params)
 
             return {
                 "message_id": response.sid,
@@ -66,39 +88,14 @@ class TwilioClient:
             )
             raise
 
-    async def verify_number(self, phone_number: str) -> Dict:
-        """Start WhatsApp number verification process"""
+    def _format_message(self, template_name: str, parameters: Dict[str, str]) -> str:
+        """Format message with parameters"""
         try:
-            verification = self.client.verify.v2.services(
-                settings.TWILIO_VERIFY_SERVICE_SID
-            ).verifications.create(
-                to=f'whatsapp:{phone_number}',
-                channel='whatsapp'
-            )
-            
-            return {
-                "status": verification.status,
-                "valid": True
-            }
-        except TwilioRestException as e:
-            self.logger.error("verification_error", error=str(e))
-            return {
-                "status": "failed",
-                "valid": False,
-                "error": str(e)
-            }
-
-    async def check_verification(self, phone_number: str, code: str) -> bool:
-        """Check verification code"""
-        try:
-            verification_check = self.client.verify.v2.services(
-                settings.TWILIO_VERIFY_SERVICE_SID
-            ).verification_checks.create(
-                to=f'whatsapp:{phone_number}',
-                code=code
-            )
-            
-            return verification_check.status == "approved"
-        except TwilioRestException as e:
-            self.logger.error("verification_check_error", error=str(e))
-            return False
+            template = settings.MESSAGE_TEMPLATES.get(template_name)
+            if not template:
+                raise ValueError(f"Template not found: {template_name}")
+            return template.format(**parameters)
+        except KeyError as e:
+            raise ValueError(f"Missing template parameter: {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Error formatting message: {str(e)}")

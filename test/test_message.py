@@ -1,119 +1,128 @@
-# test/test_message.py
-
 import asyncio
 import os
-import sys
 from pathlib import Path
-
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
-
+from typing import Optional
 from dotenv import load_dotenv
-from twilio.rest import Client
-from datetime import datetime
 
-# Load environment variables from project root
+# Load environment variables
+project_root = Path(__file__).parent.parent
 load_dotenv(project_root / '.env')
+
+from src.services.twilio_client import TwilioClient
 
 class WhatsAppTester:
     def __init__(self):
-        self.account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-        self.auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-        self.from_number = os.getenv('TWILIO_FROM_NUMBER')  # Your Twilio WhatsApp number
-        
-        if not all([self.account_sid, self.auth_token, self.from_number]):
-            raise ValueError("Missing required environment variables")
-        
-        self.client = Client(self.account_sid, self.auth_token)
+        self.twilio = TwilioClient()
 
     def format_phone(self, phone: str) -> str:
-        """Format phone number to WhatsApp format"""
-        # Remove non-numeric characters
+        """Format phone number to international format"""
         cleaned = ''.join(filter(str.isdigit, phone))
         
-        # Add country code if needed
-        if len(cleaned) == 11:  # Brazilian number with DDD
-            return f"55{cleaned}"
-        elif len(cleaned) == 10:  # Old format without 9
-            return f"559{cleaned}"
-        elif len(cleaned) >= 12:  # Already has country code
+        if phone.startswith('+'):
+            if len(cleaned) >= 10:
+                return cleaned
+        
+        if cleaned.startswith('64'):
+            if len(cleaned) == 11:
+                return cleaned
+            if len(cleaned) == 9:
+                return f"64{cleaned}"
+        
+        if cleaned.startswith('55'):
             return cleaned
+        if len(cleaned) == 11:
+            return f"55{cleaned}"
         
         raise ValueError(f"Invalid phone number format: {phone}")
 
-    def send_test_message(self, to_number: str, campaign_type: str = 'birthday'):
+    async def send_test_message(self, to_number: str, campaign_type: str = 'birthday', loyalty_count: int = 0):
         """Send a test message"""
+        from src.models.message import Message
+        from src.config.constants import CampaignType
+        
         try:
-            # Format the phone number
             formatted_number = self.format_phone(to_number)
-            
-            # Get template and parameters based on campaign type
-            template, parameters = self._get_campaign_content(campaign_type)
+            parameters = self._get_campaign_parameters(campaign_type, loyalty_count)
             
             print(f"Sending {campaign_type} message to {formatted_number}")
             
-            message = self.client.messages.create(
-                from_=f'whatsapp:{self.from_number}',
-                body=template.format(**parameters),
-                to=f'whatsapp:{formatted_number}'
+            message = Message(
+                user_id="test_user",
+                campaign_type=CampaignType(campaign_type),
+                target_id="test_target",
+                phone_number=formatted_number,
+                template_name=campaign_type,
+                parameters=parameters,
+                loyalty_count=loyalty_count if campaign_type == 'loyalty' else None
             )
             
-            print(f"Message sent! SID: {message.sid}")
-            print(f"Status: {message.status}")
-            return message.sid
+            result = await self.twilio.send_message(message)
+            
+            print(f"Message sent! SID: {result['message_id']}")
+            print(f"Status: {result['status']}")
+            return result['message_id']
             
         except Exception as e:
             print(f"Error sending message: {str(e)}")
             raise
 
-    def _get_campaign_content(self, campaign_type: str):
-        """Get template and parameters for different campaign types"""
-        templates = {
-            'birthday': (
-                "Olá {name}! 🎉 Feliz Aniversário! Como presente especial, preparamos um cupom para você: {coupon}",
-                {"name": "Test User", "coupon": "BDAY10"}
-            ),
-            'welcome': (
-                "Olá {name}! 👋 Bem-vindo à nossa lavanderia! Estamos felizes em ter você como cliente.",
-                {"name": "Test User"}
-            ),
-            'reactivation': (
-                "Olá {name}! 😊 Sentimos sua falta! Faz {days} dias que não te vemos. Que tal voltar?",
-                {"name": "Test User", "days": "30"}
-            ),
-            'loyalty': (
-                "Olá {name}! 🌟 Você é um cliente especial! Aqui está um cupom de fidelidade: {coupon}",
-                {"name": "Test User", "coupon": "LOYAL10"}
-            )
+    def _get_campaign_parameters(self, campaign_type: str, loyalty_count: int = 0):
+        """Get parameters for different campaign types"""
+        parameters = {
+            'birthday': {
+                "name": "Test User",
+                "coupon": "BDAY10"
+            },
+            'welcome': {
+                "name": "Test User"
+            },
+            'reactivation': {
+                "name": "Test User",
+                "days_inactive": "30"
+            },
+            'loyalty': {
+                "name": "Test User",
+                "services": str(loyalty_count)
+            }
         }
         
-        return templates.get(campaign_type, templates['birthday'])
+        return parameters.get(campaign_type, parameters['birthday'])
 
-def main():
-    # Get phone number from command line
-    phone = input("Enter phone number to test: ")
-    
-    # Get campaign type
-    print("\nAvailable campaign types:")
-    print("1. Birthday")
-    print("2. Welcome")
-    print("3. Reactivation")
-    print("4. Loyalty")
-    campaign_choice = input("\nSelect campaign type (1-4): ")
-    
-    campaign_types = {
-        '1': 'birthday',
-        '2': 'welcome',
-        '3': 'reactivation',
-        '4': 'loyalty'
-    }
-    
-    campaign_type = campaign_types.get(campaign_choice, 'birthday')
-    
-    # Initialize tester and send message
-    tester = WhatsAppTester()
-    tester.send_test_message(phone, campaign_type)
+async def main():
+    try:
+        phone = input("Enter phone number to test: ")
+        
+        print("\nAvailable campaign types:")
+        print("1. Birthday")
+        print("2. Welcome")
+        print("3. Reactivation")
+        print("4. Loyalty")
+        campaign_choice = input("\nSelect campaign type (1-4): ")
+        
+        campaign_types = {
+            '1': 'birthday',
+            '2': 'welcome',
+            '3': 'reactivation',
+            '4': 'loyalty'
+        }
+        
+        campaign_type = campaign_types.get(campaign_choice, 'birthday')
+        
+        loyalty_count = 0
+        if campaign_type == 'loyalty':
+            loyalty_count = int(input("\nEnter number of services (1-10): "))
+            if not 1 <= loyalty_count <= 10:
+                print("Invalid service count. Using 1.")
+                loyalty_count = 1
+
+        tester = WhatsAppTester()
+        
+        # Send message and wait a bit for it to be delivered
+        await tester.send_test_message(phone, campaign_type, loyalty_count)
+        await asyncio.sleep(5)  # Give some time for the message to be sent
+
+    except Exception as e:
+        print(f"Error in main: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

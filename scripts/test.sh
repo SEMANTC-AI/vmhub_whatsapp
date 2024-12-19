@@ -3,9 +3,8 @@
 # Build the image if needed
 docker build -t vmhub-whatsapp .
 
-# Run the test
+# Run the test with environment variables from .env file
 docker run -it --rm \
-  -v $(pwd)/.env:/app/.env \
-  --entrypoint python \
+  --env-file .env \
   vmhub-whatsapp \
-  -m test.test_message
+  python -m test.test_message

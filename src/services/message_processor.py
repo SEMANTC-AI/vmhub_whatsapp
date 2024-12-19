@@ -49,6 +49,10 @@ class MessageProcessor:
                 parameters=self._prepare_parameters(target)
             )
 
+            # Add loyalty count for loyalty campaigns
+            if target.campaign_type == 'loyalty':
+                message.loyalty_count = target.data.get('loyalty_count', 0)
+
             # Send message
             result = await self.twilio.send_message(message)
             
@@ -80,7 +84,8 @@ class MessageProcessor:
             "phone": message.phone_number,
             "status": result.get("status", "failed"),
             "error": result.get("error_message"),
-            "created_at": firestore.SERVER_TIMESTAMP
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "loyalty_count": message.loyalty_count if message.campaign_type == 'loyalty' else None
         })
 
     async def _update_target_status(self, target: CampaignTarget, result: Dict):
@@ -112,6 +117,9 @@ class MessageProcessor:
         elif target.campaign_type == "reactivation":
             params.update({"days_inactive": target.data.get("days_since_last_purchase", "")})
         elif target.campaign_type == "loyalty":
-            params.update({"points": target.data.get("loyalty_points", "")})
+            params.update({
+                "services": str(target.data.get("loyalty_count", 0)),
+                "points": str(target.data.get("loyalty_points", 0))
+            })
             
         return params
