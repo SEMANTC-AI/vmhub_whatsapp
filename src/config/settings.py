@@ -9,26 +9,37 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
 
-    # Twilio settings
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    TWILIO_FROM_NUMBER: str
-    TWILIO_VERIFY_SERVICE_SID: Optional[str] = None
-
+    # WhatsApp Business API settings
+    WHATSAPP_PHONE_NUMBER_ID: str
+    WHATSAPP_ACCESS_TOKEN: str
+    WHATSAPP_BUSINESS_ID: str
+    
     # Storage settings
     GCS_BUCKET_NAME: str
 
     # Service settings
     MAX_RETRIES: int = 3
-    RETRY_DELAY_SECONDS: int = 300  # 5 minutes
+    RETRY_DELAY_SECONDS: int = 300
     MAX_BATCH_SIZE: int = 100
 
-    # WhatsApp settings
-    MESSAGE_TEMPLATES: Dict[str, str] = {
-        "birthday": "Olá {name}! 🎉 Feliz Aniversário! Como presente especial, preparamos um cupom para você: {coupon}",
-        "welcome": "Olá {name}! 👋 Bem-vindo à nossa lavanderia! Estamos felizes em ter você como cliente.",
-        "reactivation": "Olá {name}! 😊 Sentimos sua falta! Faz {days_inactive} dias que não te vemos. Que tal voltar?",
-        "loyalty": "Parabéns {name}! 🌟 Você completou {services} serviços! Aqui está seu cartão fidelidade atualizado."
+    # Message Templates - Updated for WhatsApp format
+    MESSAGE_TEMPLATES: Dict[str, Dict[str, str]] = {
+        "birthday": {
+            "name": "birthday_template",
+            "language": "pt_BR"
+        },
+        "welcome": {
+            "name": "welcome_template",
+            "language": "pt_BR"
+        },
+        "reactivation": {
+            "name": "reactivation_template",
+            "language": "pt_BR"
+        },
+        "loyalty": {
+            "name": "loyalty_template",
+            "language": "pt_BR"
+        }
     }
 
     # Webhook settings
@@ -44,5 +55,4 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() == "production"
 
-# Create global settings instance
 settings = Settings()

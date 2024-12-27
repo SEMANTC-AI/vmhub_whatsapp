@@ -1,15 +1,17 @@
 # src/main.py
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from src.config import settings
-from src.services import MessageProcessor, TwilioClient
+from src.services import MessageProcessor
 from src.models.campaign import CampaignTarget
 from src.models.business import BusinessPhone, PhoneVerification
 from src.utils.logging import setup_logging, get_logger, RequestContextMiddleware
-from typing import Dict
+from typing import Dict, Optional
 import structlog
 import json
+import hmac
+import hashlib
 
 # Set up logging
 setup_logging(settings.LOG_LEVEL)
@@ -33,7 +35,35 @@ app.add_middleware(
 
 # Initialize services
 processor = MessageProcessor()
-twilio = TwilioClient()
+
+async def verify_webhook_signature(
+    request: Request,
+    x_hub_signature: Optional[str] = Header(None)
+) -> bool:
+    """Verify Meta webhook signature"""
+    if not settings.WEBHOOK_SECRET:
+        return True
+        
+    if not x_hub_signature:
+        raise HTTPException(status_code=401, detail="Missing signature")
+        
+    try:
+        body = await request.body()
+        expected_signature = hmac.new(
+            settings.WEBHOOK_SECRET.encode('utf-8'),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+        
+        received_signature = x_hub_signature.replace('sha256=', '')
+        
+        if not hmac.compare_digest(received_signature, expected_signature):
+            raise HTTPException(status_code=401, detail="Invalid signature")
+            
+        return True
+    except Exception as e:
+        logger.error("signature_verification_error", error=str(e))
+        raise HTTPException(status_code=401, detail="Signature verification failed")
 
 @app.get("/health")
 async def health_check():
@@ -68,56 +98,28 @@ async def process_target(
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/verify-number")
-async def verify_number(phone: BusinessPhone):
-    """Start phone number verification process"""
-    try:
-        result = await twilio.verify_number(phone.phone_number)
-        return result
-    except Exception as e:
-        logger.error(
-            "verification_error",
-            error=str(e),
-            user_id=phone.user_id
-        )
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/check-verification")
-async def check_verification(verification: PhoneVerification):
-    """Check verification code"""
-    try:
-        result = await twilio.check_verification(
-            verification.phone_number,
-            verification.code
-        )
-        return {"verified": result}
-    except Exception as e:
-        logger.error(
-            "verification_check_error",
-            error=str(e)
-        )
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/webhook")
-async def webhook_handler(request: Request):
-    """Handle Twilio webhook"""
+async def webhook_handler(
+    request: Request,
+    verified: bool = Depends(verify_webhook_signature)
+):
+    """Handle Meta webhook"""
     try:
         body = await request.json()
         logger.info("webhook_received", payload=body)
-        
-        # Validate webhook signature if configured
-        if settings.WEBHOOK_SECRET:
-            # Add signature validation here
-            pass
             
         # Process status update
-        message_sid = body.get("MessageSid")
-        status = body.get("MessageStatus")
+        entry = body.get("entry", [{}])[0]
+        changes = entry.get("changes", [{}])[0]
+        value = changes.get("value", {})
         
-        if message_sid and status:
+        message_id = value.get("message_id")
+        status = value.get("status")
+        
+        if message_id and status:
             # Update message status
             await processor._update_message_history(
-                message_sid,
+                message_id,
                 {"status": status}
             )
             

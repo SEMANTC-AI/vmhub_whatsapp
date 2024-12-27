@@ -1,3 +1,5 @@
+# test/test_message.py
+
 import asyncio
 import os
 from pathlib import Path
@@ -8,11 +10,11 @@ from dotenv import load_dotenv
 project_root = Path(__file__).parent.parent
 load_dotenv(project_root / '.env')
 
-from src.services.twilio_client import TwilioClient
+from src.services.whatsapp_client import WhatsAppClient
 
 class WhatsAppTester:
     def __init__(self):
-        self.twilio = TwilioClient()
+        self.whatsapp = WhatsAppClient()
 
     def format_phone(self, phone: str) -> str:
         """Format phone number to international format"""
@@ -21,12 +23,6 @@ class WhatsAppTester:
         if phone.startswith('+'):
             if len(cleaned) >= 10:
                 return cleaned
-        
-        if cleaned.startswith('64'):
-            if len(cleaned) == 11:
-                return cleaned
-            if len(cleaned) == 9:
-                return f"64{cleaned}"
         
         if cleaned.startswith('55'):
             return cleaned
@@ -56,9 +52,9 @@ class WhatsAppTester:
                 loyalty_count=loyalty_count if campaign_type == 'loyalty' else None
             )
             
-            result = await self.twilio.send_message(message)
+            result = await self.whatsapp.send_message(message)
             
-            print(f"Message sent! SID: {result['message_id']}")
+            print(f"Message sent! ID: {result['message_id']}")
             print(f"Status: {result['status']}")
             return result['message_id']
             
@@ -116,10 +112,7 @@ async def main():
                 loyalty_count = 1
 
         tester = WhatsAppTester()
-        
-        # Send message and wait a bit for it to be delivered
         await tester.send_test_message(phone, campaign_type, loyalty_count)
-        await asyncio.sleep(5)  # Give some time for the message to be sent
 
     except Exception as e:
         print(f"Error in main: {str(e)}")

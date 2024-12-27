@@ -22,7 +22,7 @@ class Message(BaseModel):
     media_urls: Optional[List[str]] = None
     loyalty_count: Optional[int] = None
     status: MessageStatus = MessageStatus.PENDING
-    twilio_message_id: Optional[str] = None
+    whatsapp_message_id: Optional[str] = None
     error_message: Optional[str] = None
     attempt_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)

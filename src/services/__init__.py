@@ -1,6 +1,6 @@
 # src/services/__init__.py
 
-from .twilio_client import TwilioClient
+from .whatsapp_client import WhatsAppClient
 from .message_processor import MessageProcessor
 
-__all__ = ["TwilioClient", "MessageProcessor"]
+__all__ = ["WhatsAppClient", "MessageProcessor"]

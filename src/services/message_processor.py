@@ -2,7 +2,7 @@
 
 from src.models.message import Message, MessageStatus
 from src.models.campaign import CampaignTarget
-from src.services.twilio_client import TwilioClient
+from src.services.whatsapp_client import WhatsAppClient
 from src.utils.logging import get_logger
 from src.config import settings
 from google.cloud import firestore
@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 class MessageProcessor:
     def __init__(self):
-        self.twilio = TwilioClient()
+        self.whatsapp = WhatsAppClient()
         self.db = firestore.Client()
         self.logger = logger
 
@@ -49,12 +49,11 @@ class MessageProcessor:
                 parameters=self._prepare_parameters(target)
             )
 
-            # Add loyalty count for loyalty campaigns
             if target.campaign_type == 'loyalty':
                 message.loyalty_count = target.data.get('loyalty_count', 0)
 
             # Send message
-            result = await self.twilio.send_message(message)
+            result = await self.whatsapp.send_message(message)
             
             # Update message history
             await self._update_message_history(message, result)

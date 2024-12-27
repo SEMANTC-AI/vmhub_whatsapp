@@ -9,8 +9,8 @@ class BusinessPhone(BaseModel):
     user_id: str
     phone_number: str
     is_verified: bool = False
-    verification_code: Optional[str] = None
-    twilio_sid: Optional[str] = None
+    wa_id: Optional[str] = None
+    business_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
